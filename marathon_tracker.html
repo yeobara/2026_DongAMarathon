@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marathon Live Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0d0d;
+  --surface: #161616;
+  --card: #1e1e1e;
+  --border: #2c2c2c;
+  --red: #e8001c;
+  --red-glow: rgba(232,0,28,0.12);
+  --green: #00e676;
+  --yellow: #ffd600;
+  --blue: #40c4ff;
+  --text: #f0f0f0;
+  --muted: #555;
+  --sub: #888;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Noto Sans KR',sans-serif; min-height:100vh; }
+
+/* HEADER */
+header {
+  background:var(--surface);
+  border-bottom:2px solid var(--red);
+  padding:13px 18px;
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:200;
+}
+.logo { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px; }
+.logo span { color:var(--red); }
+.live-badge { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--red); letter-spacing:2px; }
+.live-dot { width:8px; height:8px; background:var(--red); border-radius:50%; box-shadow:0 0 8px var(--red); animation:blink 1.4s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* SETUP */
+.setup-wrap { max-width:580px; margin:32px auto; padding:0 16px; }
+
+.guide {
+  background:#0f1929; border:1px solid #1e3a5f;
+  border-radius:12px; padding:16px; margin-bottom:18px;
+  font-size:12px; color:#60a5fa; line-height:2;
+}
+.guide b { color:#93c5fd; }
+.guide code { background:#1e293b; padding:1px 6px; border-radius:4px; font-size:11px; color:#e2e8f0; }
+
+.setup-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:22px; }
+.setup-label { font-family:'Bebas Neue',sans-serif; font-size:17px; letter-spacing:2px; color:var(--sub); margin-bottom:14px; }
+
+.input-row { display:flex; gap:10px; margin-bottom:10px; }
+input {
+  flex:1; background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:12px 14px; color:var(--text); font-family:'Noto Sans KR',sans-serif; font-size:14px; outline:none;
+  transition:border-color .2s;
+}
+input:focus { border-color:var(--red); }
+input::placeholder { color:var(--muted); }
+
+.btn {
+  background:var(--red); color:#fff; border:none; border-radius:10px;
+  padding:12px 22px; font-family:'Bebas Neue',sans-serif; font-size:16px;
+  letter-spacing:1px; cursor:pointer; white-space:nowrap; transition:opacity .2s;
+}
+.btn:hover { opacity:.85; }
+.btn:disabled { background:#333; color:#555; cursor:not-allowed; opacity:1; }
+.btn-sm {
+  background:transparent; border:1px solid var(--border); color:var(--sub);
+  border-radius:8px; padding:8px 14px; font-family:'Bebas Neue',sans-serif;
+  font-size:13px; letter-spacing:1px; cursor:pointer; transition:all .2s;
+}
+.btn-sm:hover { border-color:var(--red); color:var(--red); }
+
+.status { font-size:12px; padding:9px 13px; border-radius:8px; margin-top:10px; display:none; }
+.s-loading { background:#1a1a40; color:#818cf8; border:1px solid #3730a3; display:block; }
+.s-success { background:#052e16; color:var(--green); border:1px solid #166534; display:block; }
+.s-error   { background:#1f0a0a; color:#f87171; border:1px solid #991b1b; display:block; }
+
+/* BOARD */
+#board { display:none; }
+.board-bar {
+  max-width:900px; margin:0 auto 14px; padding:0 16px;
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
+}
+.board-title { font-family:'Bebas Neue',sans-serif; font-size:19px; letter-spacing:2px; color:var(--sub); }
+.board-title b { color:var(--text); font-size:26px; }
+.board-meta { font-size:11px; color:var(--muted); }
+.board-actions { display:flex; gap:8px; }
+
+/* RUNNER LIST */
+.runner-list { max-width:900px; margin:0 auto; padding:0 16px 60px; display:flex; flex-direction:column; gap:10px; }
+
+/* CARD */
+.rcard {
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  overflow:hidden; transition:border-color .2s; position:relative;
+  animation:fadeUp .3s ease;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+.rcard.finished { border-left:3px solid var(--green); }
+.rcard.running  { border-left:3px solid var(--red); }
+.rcard.waiting  { border-left:3px solid var(--muted); }
+
+/* CARD MAIN ROW */
+.card-main {
+  display:grid;
+  grid-template-columns: 160px 1fr auto;
+  align-items:center;
+  padding:14px 16px;
+  gap:14px;
+  cursor:pointer;
+  user-select:none;
+}
+@media(max-width:520px) {
+  .card-main { grid-template-columns:1fr auto; grid-template-rows:auto auto; }
+  .card-progress { grid-column:1 / -1; }
+}
+
+.card-name { font-weight:800; font-size:17px; }
+.card-bib  { font-size:11px; color:var(--muted); margin-top:3px; }
+
+.cat-badge {
+  display:inline-block; font-size:10px; font-weight:700;
+  padding:2px 7px; border-radius:4px; margin-left:5px; vertical-align:middle;
+}
+.cat-full { background:#7f1d1d; color:#fca5a5; }
+.cat-half { background:#1e3a5f; color:#93c5fd; }
+.cat-10k  { background:#14532d; color:#86efac; }
+
+.status-label { font-size:10px; font-weight:700; letter-spacing:1px; color:var(--muted); text-transform:uppercase; margin-bottom:4px; }
+.card-location { font-size:14px; font-weight:600; }
+.pace-row { font-size:12px; color:var(--sub); margin-top:3px; }
+.pace-val  { color:var(--yellow); font-weight:700; }
+.speed-val { color:var(--blue); }
+
+.card-time-wrap { text-align:right; }
+.time-label { font-size:10px; color:var(--muted); letter-spacing:1px; margin-bottom:2px; }
+.time-value {
+  font-family:'Bebas Neue',sans-serif; font-size:34px;
+  letter-spacing:2px; color:var(--green); line-height:1;
+}
+.time-value.dim { color:var(--muted); font-size:22px; }
+
+.detail-link {
+  display:inline-block; margin-top:5px; font-size:11px; color:var(--muted);
+  text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:2px 8px;
+  transition:all .15s;
+}
+.detail-link:hover { color:var(--red); border-color:var(--red); }
+
+/* SPLITS */
+.card-splits { padding:0 16px 14px; display:none; }
+.splits-label { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+.splits-grid { display:grid; grid-template-columns:repeat(9,1fr); gap:5px; }
+@media(max-width:500px) { .splits-grid { grid-template-columns:repeat(5,1fr); } }
+
+.split-cell {
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:7px 4px; text-align:center;
+}
+.split-cell.reached { background:#0f2a1a; border-color:#166534; }
+.split-cell.latest  { background:#1c1c2e; border-color:var(--red); box-shadow:0 0 8px var(--red-glow); }
+
+.sp-km   { font-size:9px; color:var(--muted); font-weight:700; }
+.sp-pace { font-size:11px; font-weight:700; color:var(--green); margin:3px 0; }
+.sp-pace.empty { color:var(--border); }
+.sp-time { font-size:9px; color:var(--sub); }
+
+/* 토글 버튼 */
+.toggle-row {
+  padding:0 16px 10px; display:flex; align-items:center; gap:6px;
+  cursor:pointer;
+}
+.toggle-row span { font-size:11px; color:var(--muted); }
+.toggle-row:hover span { color:var(--sub); }
+
+/* 스켈레톤 */
+.skel {
+  background:linear-gradient(90deg,var(--surface) 25%,#222 50%,var(--surface) 75%);
+  background-size:200% 100%; animation:shimmer 1.4s infinite;
+  border-radius:6px; height:13px;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* 프록시 상태 배너 */
+.proxy-banner {
+  background:#1a1a0a; border:1px solid #713f12; border-radius:10px;
+  padding:10px 14px; font-size:12px; color:#fbbf24; margin-bottom:16px; display:none;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MARATHON <span>LIVE</span></div>
+  <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+</header>
+
+<!-- SETUP -->
+<div class="setup-wrap" id="setupWrap">
+  <div class="guide">
+    <b>구글 시트 형식</b><br>
+    <code>A1</code> 대회코드 &nbsp;·&nbsp;
+    <code>B열</code> 선수이름 &nbsp;·&nbsp;
+    <code>C열</code> 배번 (선택)<br>
+    예) <code>A1: 202560000001</code> &nbsp;
+        <code>B1: 홍길동</code> &nbsp;
+        <code>C1: 1234</code>
+  </div>
+
+  <div id="proxyBanner" class="proxy-banner">
+    ⚠️ 데이터를 가져오는 중 프록시 서버를 경유합니다. 처음 조회 시 10~20초 걸릴 수 있어요.
+  </div>
+
+  <div class="setup-card">
+    <div class="setup-label">구글 시트 연동</div>
+    <div class="input-row">
+      <input id="sheetInput" type="text" placeholder="시트 ID 또는 URL 전체 붙여넣기">
+      <button class="btn" id="startBtn" onclick="loadSheet()">시작</button>
+    </div>
+    <div id="setupStatus" class="status"></div>
+  </div>
+</div>
+
+<!-- BOARD -->
+<div id="board">
+  <div class="board-bar">
+    <div class="board-title">RUNNERS &nbsp;<b id="totalCount">0</b></div>
+    <div class="board-meta" id="lastUpdate"></div>
+    <div class="board-actions">
+      <button class="btn-sm" onclick="fetchAll()">🔄 갱신</button>
+      <button class="btn-sm" onclick="reloadSheet()">🔃 시트</button>
+    </div>
+  </div>
+  <div class="runner-list" id="runnerList"></div>
+</div>
+
+<script>
+// ================================================================
+// ✏️ 시트 ID 미리 고정 (선택사항, 비워두면 입력창에서 입력)
+const DEFAULT_SHEET = '';
+// ================================================================
+
+const BASE = 'https://smartchip.co.kr/return_data_livephoto.asp';
+const KMS  = [5, 10, 15, 20, 25, 30, 35, 40, 42.2];
+
+// CORS 프록시 목록 (순서대로 시도)
+const PROXIES = [
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+let eventCode = '';
+let runners   = [];   // [{name, bib}]
+let proxyIdx  = 0;    // 현재 사용 중인 프록시 인덱스
+let refreshTimer = null;
+
+// ── 초기화 ──
+window.addEventListener('DOMContentLoaded', () => {
+  if (DEFAULT_SHEET) {
+    document.getElementById('sheetInput').value = DEFAULT_SHEET;
+    loadSheet();
+  }
+});
+
+// ── 프록시 경유 fetch ──
+async function proxyFetch(targetUrl) {
+  // 현재 프록시부터 순서대로 시도
+  for (let i = 0; i < PROXIES.length; i++) {
+    const idx = (proxyIdx + i) % PROXIES.length;
+    try {
+      const proxyUrl = PROXIES[idx](targetUrl);
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) throw new Error('not ok');
+
+      // allorigins는 JSON { contents: "..." } 형태
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('json')) {
+        const j = await res.json();
+        proxyIdx = idx; // 성공한 프록시 기억
+        return j.contents || j.body || '';
+      }
+      const text = await res.text();
+      proxyIdx = idx;
+      return text;
+    } catch(e) {
+      // 다음 프록시 시도
+    }
+  }
+  throw new Error('모든 프록시 실패');
+}
+
+// ── 시트 불러오기 ──
+function extractId(s) {
+  const m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);
+  return m ? m[1] : s.trim();
+}
+
+async function loadSheet() {
+  const raw = document.getElementById('sheetInput').value.trim();
+  if (!raw) return;
+  const id = extractId(raw);
+  setStatus('loading', '⏳ 시트 불러오는 중...');
+  document.getElementById('startBtn').disabled = true;
+
+  try {
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`;
+    const res = await fetch(csvUrl);
+    if (!res.ok) throw new Error();
+    const text = await res.text();
+    const rows = text.trim().split('\n')
+      .map(r => r.split(',').map(c => c.trim().replace(/"/g,'')));
+
+    eventCode = rows[0][0];
+    runners   = rows.filter(r => r[1]).map(r => ({ name: r[1], bib: r[2] || '' }));
+
+    if (!eventCode || !runners.length) throw new Error();
+
+    setStatus('success', `✅ ${runners.length}명 로드 완료`);
+    document.getElementById('proxyBanner').style.display = 'block';
+
+    setTimeout(() => {
+      document.getElementById('setupWrap').style.display = 'none';
+      initBoard();
+    }, 700);
+  } catch {
+    setStatus('error', '❌ 실패. 시트 공유를 "링크 있는 모든 사용자 → 뷰어"로 설정해주세요.');
+    document.getElementById('startBtn').disabled = false;
+  }
+}
+
+function setStatus(type, msg) {
+  const el = document.getElementById('setupStatus');
+  el.className = 'status s-' + type;
+  el.textContent = msg;
+}
+
+// ── 보드 초기화 ──
+function initBoard() {
+  document.getElementById('board').style.display = 'block';
+  document.getElementById('totalCount').textContent = runners.length;
+  renderSkeletons();
+  fetchAll();
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(fetchAll, 30000);
+}
+
+// ── 스켈레톤 카드 ──
+function renderSkeletons() {
+  const list = document.getElementById('runnerList');
+  list.innerHTML = runners.map(r => `
+    <div class="rcard waiting" id="card-${eid(r.name)}">
+      <div class="card-main">
+        <div><div class="card-name">${r.name}</div><div class="card-bib">${r.bib ? 'BIB '+r.bib : '–'}</div></div>
+        <div><div class="skel" style="width:100px;margin-bottom:8px;"></div><div class="skel" style="width:70px;"></div></div>
+        <div class="card-time-wrap"><div class="time-label">NET TIME</div><div class="time-value dim">--:--:--</div></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── 전체 갱신 ──
+async function fetchAll() {
+  updateTime();
+  // 동시에 다 날리되, 너무 빠르면 서버 부담 → 0.3초 간격으로 순차 시작
+  runners.forEach((r, i) => {
+    setTimeout(() => fetchRunner(r), i * 300);
+  });
+}
+
+async function reloadSheet() {
+  clearInterval(refreshTimer);
+  document.getElementById('setupWrap').style.display = 'block';
+  document.getElementById('board').style.display = 'none';
+  document.getElementById('startBtn').disabled = false;
+  setStatus('', '');
+}
+
+// ── 개별 선수 fetch + 파싱 ──
+async function fetchRunner(runner) {
+  const query = runner.bib || runner.name;
+  const targetUrl = `${BASE}?nameorbibno=${encodeURIComponent(query)}&usedata=${eventCode}`;
+
+  try {
+    const html = await proxyFetch(targetUrl);
+    const data = parseHTML(html, runner);
+    renderCard(runner, data);
+  } catch(e) {
+    renderCard(runner, null);
+  }
+}
+
+// ── HTML 파싱 ──
+function parseHTML(html, runner) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const text = doc.body ? doc.body.innerText : html;
+
+  if (!text || text.includes('배번호를 선택하세요') || text.trim().length < 50) return null;
+
+  const d = {};
+
+  // 이름 / 카테고리 / 배번
+  const hm = text.match(/([^\s\n]+)\s+(Full|Half|10K|10k|5K|5k)\s+BIB\s+(\d+)/);
+  if (hm) { d.name = hm[1]; d.category = hm[2]; d.bib = hm[3]; }
+
+  // 실시간 페이스 / 속도
+  const pm = text.match(/Pace\s+([\d:]+)\s+min\/km/);
+  const sm = text.match(/Speed\s+([\d.]+)\s+km\/h/);
+  d.pace  = pm ? pm[1] : null;
+  d.speed = sm ? sm[1] : null;
+
+  // 구간 테이블 파싱
+  d.splits = [];
+  const tables = doc.querySelectorAll('table');
+  tables.forEach(table => {
+    const rows = table.querySelectorAll('tr');
+    let ptRow, tmRow, pcRow;
+    rows.forEach(row => {
+      const cells = [...row.querySelectorAll('td,th')].map(c => c.innerText.trim());
+      if (cells[0] === 'POINT') ptRow = cells.slice(1);
+      if (cells[0] === 'TIME' && !tmRow) tmRow = cells.slice(1);
+      if (cells[0] === 'PACE') pcRow = cells.slice(1);
+    });
+    if (ptRow && tmRow) {
+      ptRow.forEach((pt, i) => {
+        const km = parseFloat(pt);
+        if (!isNaN(km)) {
+          d.splits.push({ km, time: tmRow[i]||'', pace: pcRow ? (pcRow[i]||'') : '' });
+        }
+      });
+    }
+  });
+
+  // 테이블 파싱 실패 시 텍스트 fallback
+  if (!d.splits.length) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    // POINT / TIME / PACE 행 찾기
+    let ptIdx = lines.findIndex(l => l === 'POINT');
+    let tmIdx = lines.findIndex(l => l === 'TIME');
+    let pcIdx = lines.findIndex(l => l === 'PACE');
+    if (ptIdx > -1 && tmIdx > -1) {
+      const pts   = lines.slice(ptIdx+1, tmIdx).filter(l => /[\d.]+km/.test(l));
+      const times = lines.slice(tmIdx+1, pcIdx > -1 ? pcIdx : tmIdx+10).filter(l => /\d+:\d+/.test(l));
+      const paces = pcIdx > -1 ? lines.slice(pcIdx+1, pcIdx+10).filter(l => /\d+:\d+/.test(l)) : [];
+      pts.forEach((pt, i) => {
+        const km = parseFloat(pt);
+        if (!isNaN(km)) d.splits.push({ km, time: times[i]||'', pace: paces[i]||'' });
+      });
+    }
+  }
+
+  const reached = d.splits.filter(s => s.time && s.time.trim() && s.time !== '--');
+  d.lastSplit = reached.slice(-1)[0] || null;
+  d.finished  = d.splits.some(s => s.km >= 42 && s.time && s.time.trim());
+  const fin   = d.splits.find(s => s.km >= 42.2);
+  d.finalTime = fin ? fin.time : (d.lastSplit ? d.lastSplit.time : null);
+
+  return d;
+}
+
+// ── 카드 렌더 ──
+function renderCard(runner, d) {
+  const el = document.getElementById(`card-${eid(runner.name)}`);
+  if (!el) return;
+
+  const query = runner.bib || runner.name;
+  const url   = `${BASE}?nameorbibno=${encodeURIComponent(query)}&usedata=${eventCode}`;
+
+  if (!d) {
+    el.className = 'rcard waiting';
+    el.innerHTML = `
+      <div class="card-main">
+        <div><div class="card-name">${runner.name}</div><div class="card-bib">${runner.bib ? 'BIB '+runner.bib : '–'}</div></div>
+        <div><div class="status-label">대기 / 미출발</div><div style="font-size:13px;color:var(--muted);">기록 없음</div></div>
+        <div class="card-time-wrap">
+          <div class="time-label">NET TIME</div>
+          <div class="time-value dim">--:--:--</div>
+          <a class="detail-link" href="${url}" target="_blank">상세 ↗</a>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const catMap  = { Full:'cat-full', Half:'cat-half', '10K':'cat-10k', '10k':'cat-10k' };
+  const catCls  = catMap[d.category] || 'cat-full';
+  const statusTxt = d.finished ? '🏁 완주' : (d.lastSplit ? `📍 ${d.lastSplit.km}km 통과` : '🏃 진행 중');
+  const cardCls   = d.finished ? 'finished' : 'running';
+  const cid       = eid(runner.name);
+
+  el.className = `rcard ${cardCls}`;
+  el.innerHTML = `
+    <div class="card-main" onclick="toggleSplits('${cid}')">
+      <div class="card-identity">
+        <div class="card-name">
+          ${runner.name}
+          ${d.category ? `<span class="cat-badge ${catCls}">${d.category}</span>` : ''}
+        </div>
+        <div class="card-bib">BIB ${d.bib || runner.bib || '–'}</div>
+      </div>
+      <div class="card-progress">
+        <div class="status-label">${statusTxt}</div>
+        ${d.pace
+          ? `<div class="pace-row">페이스 <span class="pace-val">${d.pace}</span> min/km &nbsp;·&nbsp; 속도 <span class="speed-val">${d.speed||'–'}</span> km/h</div>`
+          : `<div class="pace-row" style="color:var(--muted);">–</div>`}
+      </div>
+      <div class="card-time-wrap">
+        <div class="time-label">${d.finished ? 'FINISH' : 'NET TIME'}</div>
+        <div class="time-value ${d.finalTime ? '' : 'dim'}">${d.finalTime || '--:--:--'}</div>
+        <a class="detail-link" href="${url}" target="_blank" onclick="event.stopPropagation()">상세 ↗</a>
+      </div>
+    </div>
+    <div class="card-splits" id="splits-${cid}">
+      <div class="splits-label">구간 페이스</div>
+      ${buildSplits(d.splits)}
+    </div>
+    <div class="toggle-row" onclick="toggleSplits('${cid}')">
+      <span id="togbtn-${cid}">▼ 구간 보기</span>
+    </div>
+  `;
+}
+
+// ── 구간 그리드 ──
+function buildSplits(splits) {
+  if (!splits || !splits.length)
+    return '<div style="font-size:12px;color:var(--muted);">구간 데이터 없음</div>';
+
+  const reached = splits.filter(s => s.time && s.time.trim() && s.time !== '--');
+  const latestKm = reached.length ? reached[reached.length-1].km : -1;
+  const map = {};
+  splits.forEach(s => { map[s.km] = s; });
+
+  const cells = KMS.map(km => {
+    const s = map[km] || { km, time:'', pace:'' };
+    const has = !!(s.time && s.time.trim() && s.time !== '--');
+    const isLatest = s.km === latestKm;
+    const cls = isLatest ? 'split-cell latest' : (has ? 'split-cell reached' : 'split-cell');
+    return `
+      <div class="${cls}">
+        <div class="sp-km">${km}k</div>
+        <div class="sp-pace ${has ? '' : 'empty'}">${s.pace || '–'}</div>
+        <div class="sp-time">${s.time || '–'}</div>
+      </div>`;
+  }).join('');
+
+  return `<div class="splits-grid">${cells}</div>`;
+}
+
+// ── 구간 토글 ──
+function toggleSplits(cid) {
+  const panel = document.getElementById(`splits-${cid}`);
+  const btn   = document.getElementById(`togbtn-${cid}`);
+  if (!panel) return;
+  const open = panel.style.display === 'block';
+  panel.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? '▼ 구간 보기' : '▲ 닫기';
+}
+
+// ── 유틸 ──
+function eid(name) { return encodeURIComponent(name).replace(/%/g,'_'); }
+
+function updateTime() {
+  const now = new Date();
+  const t = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+  document.getElementById('lastUpdate').textContent = `갱신: ${t} · 30초 자동`;
+}
+</script>
+</body>
+</html>
