@@ -192,6 +192,22 @@ input::placeholder { color:var(--muted); }
   background:#1a1a0a; border:1px solid #713f12; border-radius:10px;
   padding:10px 14px; font-size:12px; color:#fbbf24; margin-bottom:16px; display:none;
 }
+
+.cat-section { margin-bottom: 28px; }
+.cat-section-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 14px;
+  letter-spacing: 3px;
+  color: var(--muted);
+  padding: 0 0 10px 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cat-section-title b { font-size: 20px; color: var(--text); }
+.runner-list { display: flex; flex-direction: column; gap: 10px; }
 </style>
 </head>
 <body>
@@ -237,7 +253,7 @@ input::placeholder { color:var(--muted); }
       <button class="btn-sm" onclick="reloadSheet()">🔃 시트</button>
     </div>
   </div>
-  <div class="runner-list" id="runnerList"></div>
+  <div id="boardInner" style="max-width:900px;margin:0 auto;padding:0 16px 60px;"></div>
 </div>
 
 <script>
@@ -320,7 +336,7 @@ async function loadSheet() {
       .map(r => r.split(',').map(c => c.trim().replace(/"/g,'')));
 
     eventCode = rows[0][0];
-    runners   = rows.filter(r => r[1]).map(r => ({ name: r[1], bib: r[2] || '' }));
+    runners   = rows.filter(r => r[1]).map(r => ({ name: r[1], bib: r[2] || '', cat: r[3] || '' }));
 
     if (!eventCode || !runners.length) throw new Error();
 
@@ -353,18 +369,42 @@ function initBoard() {
   refreshTimer = setInterval(fetchAll, 30000);
 }
 
+// ── 카테고리 목록 (시트 순서 기반, 데이터 들어오면 보정) ──
+const CAT_ORDER = ['Full', 'Half', '10K', '10k', '5K', '5k', 'unknown'];
+
+function getCatLabel(cat) {
+  const map = { Full:'풀코스 FULL', Half:'하프 HALF', '10K':'10K', '10k':'10K', '5K':'5K', '5k':'5K' };
+  return map[cat] || cat || '기타';
+}
+
 // ── 스켈레톤 카드 ──
 function renderSkeletons() {
-  const list = document.getElementById('runnerList');
-  list.innerHTML = runners.map(r => `
-    <div class="rcard waiting" id="card-${eid(r.name)}">
-      <div class="card-main">
-        <div><div class="card-name">${r.name}</div><div class="card-bib">${r.bib ? 'BIB '+r.bib : '–'}</div></div>
-        <div><div class="skel" style="width:100px;margin-bottom:8px;"></div><div class="skel" style="width:70px;"></div></div>
-        <div class="card-time-wrap"><div class="time-label">NET TIME</div><div class="time-value dim">--:--:--</div></div>
+  // 시트에 카테고리 열(D열) 있으면 쓰고, 없으면 일단 unknown으로
+  const cats = [...new Set(runners.map(r => r.cat || 'unknown'))];
+  const inner = document.getElementById('boardInner');
+  inner.innerHTML = '';
+
+  cats.forEach(cat => {
+    const group = runners.filter(r => (r.cat || 'unknown') === cat);
+    const sec = document.createElement('div');
+    sec.className = 'cat-section';
+    sec.id = 'section-' + cat;
+    sec.innerHTML = cats.length > 1
+      ? `<div class="cat-section-title"><b>${getCatLabel(cat)}</b> ${group.length}명</div><div class="runner-list" id="list-${cat}"></div>`
+      : `<div class="runner-list" id="list-${cat}"></div>`;
+    inner.appendChild(sec);
+
+    const list = document.getElementById('list-' + cat);
+    list.innerHTML = group.map(r => `
+      <div class="rcard waiting" id="card-${eid(r.name)}">
+        <div class="card-main">
+          <div><div class="card-name">${r.name}</div><div class="card-bib">${r.bib ? 'BIB '+r.bib : '–'}</div></div>
+          <div><div class="skel" style="width:100px;margin-bottom:8px;"></div><div class="skel" style="width:70px;"></div></div>
+          <div class="card-time-wrap"><div class="time-label">NET TIME</div><div class="time-value dim">--:--:--</div></div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  });
 }
 
 // ── 전체 갱신 ──
@@ -405,20 +445,19 @@ async function fetchRunner(runner) {
 
 // ── 기록순 정렬 ──
 function timeToSec(t) {
-  if (!t || t === '--:--:--') return 99999;
-  const p = t.split(':').map(Number);
+  if (!t || t.includes('-') || t.trim() === '') return 99999;
+  const p = t.trim().split(':').map(Number);
+  if (p.length === 2) return p[0]*60 + p[1];
   return (p[0]||0)*3600 + (p[1]||0)*60 + (p[2]||0);
 }
 
-function sortCards() {
-  const list = document.getElementById('runnerList');
-  const cards = [...list.children];
+function sortOneList(listEl, groupRunners) {
+  const cards = [...listEl.children];
   cards.sort((a, b) => {
     const na = a.id.replace('card-', '');
     const nb = b.id.replace('card-', '');
-    // name 역조회
-    const ra = runners.find(r => eid(r.name) === na);
-    const rb = runners.find(r => eid(r.name) === nb);
+    const ra = groupRunners.find(r => eid(r.name) === na);
+    const rb = groupRunners.find(r => eid(r.name) === nb);
     if (!ra || !rb) return 0;
     const da = runnerData[ra.name];
     const db = runnerData[rb.name];
@@ -428,19 +467,26 @@ function sortCards() {
     const stateB = db ? (db.finished ? 0 : (db.lastSplit ? 1 : 2)) : 3;
     if (stateA !== stateB) return stateA - stateB;
 
-    // 같은 상태면 기록 빠른 순 (완주) or 더 멀리 간 순 (진행중)
     if (stateA === 0) return timeToSec(da.finalTime) - timeToSec(db.finalTime);
     if (stateA === 1) {
-      // 더 멀리 간 사람이 위
       const kmA = da.lastSplit ? da.lastSplit.km : 0;
       const kmB = db.lastSplit ? db.lastSplit.km : 0;
       if (kmA !== kmB) return kmB - kmA;
-      // 같은 구간이면 페이스 빠른 순
       return timeToSec(da.pace) - timeToSec(db.pace);
     }
     return 0;
   });
-  cards.forEach(c => list.appendChild(c));
+  cards.forEach(c => listEl.appendChild(c));
+}
+
+function sortCards() {
+  const cats = [...new Set(runners.map(r => r.cat || 'unknown'))];
+  cats.forEach(cat => {
+    const listEl = document.getElementById('list-' + cat);
+    if (!listEl) return;
+    const group = runners.filter(r => (r.cat || 'unknown') === cat);
+    sortOneList(listEl, group);
+  });
 }
 
 // ── HTML 파싱 ──
