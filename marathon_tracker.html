@@ -258,8 +258,10 @@ const PROXIES = [
 
 let eventCode = '';
 let runners   = [];   // [{name, bib}]
+let runnerData = {};  // {name: parsedData}
 let proxyIdx  = 0;    // 현재 사용 중인 프록시 인덱스
 let refreshTimer = null;
+let fetchedCount = 0; // 응답 받은 수
 
 // ── 초기화 ──
 window.addEventListener('DOMContentLoaded', () => {
@@ -368,6 +370,7 @@ function renderSkeletons() {
 // ── 전체 갱신 ──
 async function fetchAll() {
   updateTime();
+  fetchedCount = 0;
   // 동시에 다 날리되, 너무 빠르면 서버 부담 → 0.3초 간격으로 순차 시작
   runners.forEach((r, i) => {
     setTimeout(() => fetchRunner(r), i * 300);
@@ -390,10 +393,54 @@ async function fetchRunner(runner) {
   try {
     const html = await proxyFetch(targetUrl);
     const data = parseHTML(html, runner);
+    runnerData[runner.name] = data;
     renderCard(runner, data);
   } catch(e) {
+    runnerData[runner.name] = null;
     renderCard(runner, null);
   }
+  fetchedCount++;
+  if (fetchedCount >= runners.length) sortCards();
+}
+
+// ── 기록순 정렬 ──
+function timeToSec(t) {
+  if (!t || t === '--:--:--') return 99999;
+  const p = t.split(':').map(Number);
+  return (p[0]||0)*3600 + (p[1]||0)*60 + (p[2]||0);
+}
+
+function sortCards() {
+  const list = document.getElementById('runnerList');
+  const cards = [...list.children];
+  cards.sort((a, b) => {
+    const na = a.id.replace('card-', '');
+    const nb = b.id.replace('card-', '');
+    // name 역조회
+    const ra = runners.find(r => eid(r.name) === na);
+    const rb = runners.find(r => eid(r.name) === nb);
+    if (!ra || !rb) return 0;
+    const da = runnerData[ra.name];
+    const db = runnerData[rb.name];
+
+    // 완주 > 진행중 > 미출발
+    const stateA = da ? (da.finished ? 0 : (da.lastSplit ? 1 : 2)) : 3;
+    const stateB = db ? (db.finished ? 0 : (db.lastSplit ? 1 : 2)) : 3;
+    if (stateA !== stateB) return stateA - stateB;
+
+    // 같은 상태면 기록 빠른 순 (완주) or 더 멀리 간 순 (진행중)
+    if (stateA === 0) return timeToSec(da.finalTime) - timeToSec(db.finalTime);
+    if (stateA === 1) {
+      // 더 멀리 간 사람이 위
+      const kmA = da.lastSplit ? da.lastSplit.km : 0;
+      const kmB = db.lastSplit ? db.lastSplit.km : 0;
+      if (kmA !== kmB) return kmB - kmA;
+      // 같은 구간이면 페이스 빠른 순
+      return timeToSec(da.pace) - timeToSec(db.pace);
+    }
+    return 0;
+  });
+  cards.forEach(c => list.appendChild(c));
 }
 
 // ── HTML 파싱 ──
