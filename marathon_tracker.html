@@ -38,24 +38,14 @@ header {
 .event-screen { max-width:500px; margin:0 auto; padding:24px 14px; }
 .event-title { font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:3px; color:var(--muted); margin-bottom:16px; }
 .event-buttons { display:flex; flex-direction:column; gap:10px; }
-.event-btn {
-  background:var(--card); border:1px solid var(--border); border-radius:12px;
-  padding:16px 18px; text-align:left; cursor:pointer; transition:all .2s;
-  display:flex; align-items:center; justify-content:space-between;
-}
-.event-btn:hover, .event-btn:active { border-color:var(--red); background:#221010; }
-.event-btn-name { font-weight:700; font-size:16px; }
-.event-btn-sub { font-size:12px; color:var(--muted); margin-top:3px; }
-.event-btn-arrow { color:var(--muted); font-size:18px; }
 
-.divider-or {
-  text-align:center; font-size:11px; color:var(--muted);
-  margin:20px 0; letter-spacing:2px;
-  display:flex; align-items:center; gap:10px;
-}
-.divider-or::before, .divider-or::after {
-  content:''; flex:1; border-top:1px solid var(--border);
-}
+
+
+
+
+
+
+
 
 .manual-input { display:flex; gap:8px; }
 input {
@@ -187,15 +177,14 @@ input::placeholder { color:var(--muted); }
   <div class="live-badge"><div class="live-dot"></div>LIVE</div>
 </header>
 
-<!-- 대회 선택 화면 -->
+<!-- 설정 화면 -->
 <div class="event-screen" id="eventScreen">
-  <div class="event-title">대회 선택</div>
-  <div class="event-buttons" id="eventButtons"></div>
-
-  <div class="divider-or">직접 입력</div>
-
-  <div class="manual-input">
-    <input id="sheetInput" type="text" placeholder="구글 시트 ID 또는 URL">
+  <div class="event-title">구글 시트 연동</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.8;">
+    시트 A1: 대회코드 &nbsp;·&nbsp; B열: 이름 &nbsp;·&nbsp; C열: 배번 &nbsp;·&nbsp; D열: 카테고리(Full/Half/10K)
+  </div>
+  <div style="display:flex;gap:8px;">
+    <input id="sheetInput" type="text" placeholder="구글 시트 URL 붙여넣기">
     <button class="btn" id="startBtn" onclick="loadSheet()">시작</button>
   </div>
   <div id="setupStatus" class="status"></div>
@@ -220,17 +209,7 @@ input::placeholder { color:var(--muted); }
 </div>
 
 <script>
-// ================================================================
-// ✏️ 대회 목록 — 추가/수정 여기서!
-// ================================================================
-const EVENTS = [
-  {
-    name: '2026 서울 동아마라톤',
-    date: '2026.03.15',
-    sheetId: 'https://docs.google.com/spreadsheets/d/1C7o_xy3Tj1YQa2PC0JZOmXpS1zHTfAAXLl7WPCB4qUU/edit?usp=drivesdk',
-  },
-];
-// ================================================================
+
 
 const BASE = 'https://smartchip.co.kr/return_data_livephoto.asp';
 const KMS  = [5, 10, 15, 20, 25, 30, 35, 40, 42.2];
@@ -248,34 +227,7 @@ let proxyIdx    = 0;
 let fetchedCount = 0;
 let refreshTimer = null;
 
-// ── 대회 버튼 렌더 ──
-window.addEventListener('DOMContentLoaded', () => {
-  const container = document.getElementById('eventButtons');
-  if (EVENTS.length === 0) {
-    container.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0;">등록된 대회가 없어요.<br>아래 직접 입력 또는 파일 내 EVENTS 배열에 추가해주세요.</div>';
-    return;
-  }
-  EVENTS.forEach((ev, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'event-btn';
-    btn.innerHTML = `
-      <div>
-        <div class="event-btn-name">${ev.name}</div>
-        ${ev.date ? `<div class="event-btn-sub">${ev.date}</div>` : ''}
-      </div>
-      <div class="event-btn-arrow">›</div>
-    `;
-    btn.onclick = () => loadEventByIndex(i);
-    container.appendChild(btn);
-  });
-});
-
-async function loadEventByIndex(i) {
-  const ev = EVENTS[i];
-  document.getElementById('sheetInput').value = ev.sheetId;
-  currentEventName = ev.name;
-  await loadSheet();
-}
+window.addEventListener('DOMContentLoaded', () => {});
 
 // ── 홈으로 ──
 function goHome() {
