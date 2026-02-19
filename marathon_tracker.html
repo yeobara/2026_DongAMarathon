@@ -251,9 +251,9 @@ const KMS  = [5, 10, 15, 20, 25, 30, 35, 40, 42.2];
 
 // CORS 프록시 목록 (순서대로 시도)
 const PROXIES = [
-  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
 ];
 
 let eventCode = '';
